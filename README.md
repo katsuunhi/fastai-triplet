@@ -9,7 +9,7 @@
 
 
 ## 具体代码分析：
-参考[fastai文档中的Siamese实现](https://docs.fast.ai/tutorial.siamese.html)
+show_batch之类的内容，参考[fastai文档中的Siamese实现](https://docs.fast.ai/tutorial.siamese.html)
 
 ## transform
 
@@ -42,3 +42,39 @@ class TripletTransform(Transform):
         return random.choice(self.splbl2files[split][cls1]),random.choice(self.splbl2files[split][cls2]),cls1
 ```
 
+
+## triplet loss func
+直接把nn中的TripletMarginLoss拿来，修改forward。上面也提到了，fastai的pred会被封装成元组，因此改成x获取(anchor, positive, negative)，*args获取*yb。这部分的理解同样参考learner._do_one_batch()的实现。
+
+```python
+class _Loss(Module):
+    reduction: str
+    def __init__(self, size_average=None, reduce=None, reduction: str = 'mean') -> None:
+        super(_Loss, self).__init__()
+        if size_average is not None or reduce is not None:
+            self.reduction: str = _Reduction.legacy_get_string(size_average, reduce)
+        else:
+            self.reduction = reduction
+
+class triplet_loss_func(_Loss):
+    __constants__ = ['margin', 'p', 'eps', 'swap', 'reduction']
+    margin: float
+    p: float
+    eps: float
+    swap: bool
+
+    def __init__(self, margin: float = 1.0, p: float = 2., eps: float = 1e-6, swap: bool = False, size_average=None,
+                 reduce=None, reduction: str = 'mean'):
+        super(triplet_loss_func, self).__init__(size_average, reduce, reduction)
+        self.margin = margin
+        self.p = p
+        self.eps = eps
+        self.swap = swap
+    def forward(self, x, *args):
+        anchor, positive, negative = x[0], x[1], x[2]
+        
+        return F.triplet_margin_loss(anchor, positive, negative, margin=self.margin, p=self.p,
+                                     eps=self.eps, swap=self.swap, reduction=self.reduction)
+```
+
+其它就是fastai正常训练流程了，plot top losses方法实现也比较容易，我写的比较粗糙就不展开讲了
